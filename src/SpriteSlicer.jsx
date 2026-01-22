@@ -19,6 +19,7 @@ export default function SpriteSlicer() {
   
   const [dragging, setDragging] = useState(null);
   const [resizing, setResizing] = useState(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
   const canvasRef = useRef(null);
   const imgRef = useRef(null);
 
@@ -119,7 +120,7 @@ export default function SpriteSlicer() {
     
     // Draw resize handle
     ctx.fillStyle = '#ff0000';
-    ctx.fillRect(primary.x + primary.w - 6, primary.y + primary.h - 6, 12, 12);
+    ctx.fillRect(primary.x + primary.w - 8, primary.y + primary.h - 8, 16, 16);
     
     // Draw secondary horizontal (blue)
     ctx.strokeStyle = '#0000ff';
@@ -142,9 +143,11 @@ export default function SpriteSlicer() {
     const x = (e.clientX - rect.left) * (canvas.width / rect.width);
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
     
-    // Check resize handle
-    if (x >= primary.x + primary.w - 6 && x <= primary.x + primary.w + 6 &&
-        y >= primary.y + primary.h - 6 && y <= primary.y + primary.h + 6) {
+    // Check resize handle first (larger hit area for easier grabbing)
+    const handleX = primary.x + primary.w;
+    const handleY = primary.y + primary.h;
+    if (x >= handleX - 12 && x <= handleX + 8 &&
+        y >= handleY - 12 && y <= handleY + 8) {
       setResizing(true);
       return;
     }
@@ -152,6 +155,7 @@ export default function SpriteSlicer() {
     // Check primary
     if (x >= primary.x && x < primary.x + primary.w &&
         y >= primary.y && y < primary.y + primary.h) {
+      dragOffset.current = { x: x - primary.x, y: y - primary.y };
       setDragging('primary');
       return;
     }
@@ -159,6 +163,7 @@ export default function SpriteSlicer() {
     // Check secondH
     if (x >= secondH.x && x < secondH.x + primary.w &&
         y >= secondH.y && y < secondH.y + primary.h) {
+      dragOffset.current = { x: x - secondH.x, y: y - secondH.y };
       setDragging('secondH');
       return;
     }
@@ -166,6 +171,7 @@ export default function SpriteSlicer() {
     // Check secondV
     if (x >= secondV.x && x < secondV.x + primary.w &&
         y >= secondV.y && y < secondV.y + primary.h) {
+      dragOffset.current = { x: x - secondV.x, y: y - secondV.y };
       setDragging('secondV');
       return;
     }
@@ -180,19 +186,29 @@ export default function SpriteSlicer() {
     const y = (e.clientY - rect.top) * (canvas.height / rect.height);
     
     if (resizing) {
-      setPrimary(p => ({
-        ...p,
-        w: Math.max(10, x - p.x),
-        h: Math.max(10, y - p.y)
-      }));
-      setSpriteWidth(Math.max(10, Math.round(x - primary.x)));
-      setSpriteHeight(Math.max(10, Math.round(y - primary.y)));
+      const newW = Math.max(10, Math.round(x - primary.x));
+      const newH = Math.max(10, Math.round(y - primary.y));
+      setPrimary(p => ({ ...p, w: newW, h: newH }));
+      setSpriteWidth(newW);
+      setSpriteHeight(newH);
+      // Update secondary boxes to maintain their gaps
+      setSecondH(h => ({ ...h, x: primary.x + newW + hGap }));
+      setSecondV(v => ({ ...v, y: primary.y + newH + vGap }));
     } else if (dragging === 'primary') {
-      setPrimary(p => ({ ...p, x, y }));
+      const newX = x - dragOffset.current.x;
+      const newY = y - dragOffset.current.y;
+      const deltaX = newX - primary.x;
+      const deltaY = newY - primary.y;
+      setPrimary(p => ({ ...p, x: newX, y: newY }));
+      // Move secondary boxes along with primary
+      setSecondH(h => ({ x: h.x + deltaX, y: newY }));
+      setSecondV(v => ({ x: newX, y: v.y + deltaY }));
     } else if (dragging === 'secondH') {
-      setSecondH({ x, y: primary.y });
+      const newX = x - dragOffset.current.x;
+      setSecondH({ x: newX, y: primary.y });
     } else if (dragging === 'secondV') {
-      setSecondV({ x: primary.x, y });
+      const newY = y - dragOffset.current.y;
+      setSecondV({ x: primary.x, y: newY });
     }
   };
 
