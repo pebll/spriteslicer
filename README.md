@@ -2,6 +2,9 @@
 
 You ever wanted to get the individual sprites for a spritesheet of which you don't know exactly the sizes, margins, and offsets? This is the solution! Import any sprite sheet, manually adjust the parameters with help of intuitive visual preview, and get your sliced sprites in an instant!
 
+<img width="1220" height="709" alt="image" src="https://github.com/user-attachments/assets/f174d32d-cd83-4b4d-b193-c21bddae160d" />
+
+
 ## Run locally
 
 ```bash
