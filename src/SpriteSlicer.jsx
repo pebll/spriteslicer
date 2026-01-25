@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Download, Upload, X } from 'lucide-react';
+import { Download, Upload, X, Save, FolderOpen, Trash2 } from 'lucide-react';
 import JSZip from 'jszip';
+
+const PRESETS_STORAGE_KEY = 'spriteSlicer_presets';
 
 export default function SpriteSlicer() {
   const [image, setImage] = useState(null);
@@ -28,6 +30,73 @@ export default function SpriteSlicer() {
   const [pendingImage, setPendingImage] = useState(null);
   const [setupCols, setSetupCols] = useState(4);
   const [setupRows, setSetupRows] = useState(4);
+
+  // Preset state
+  const [presets, setPresets] = useState([]);
+  const [showPresetModal, setShowPresetModal] = useState(false);
+  const [presetName, setPresetName] = useState('');
+
+  // Load presets from localStorage on mount
+  useEffect(() => {
+    const savedPresets = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (savedPresets) {
+      try {
+        setPresets(JSON.parse(savedPresets));
+      } catch (e) {
+        console.error('Failed to load presets:', e);
+      }
+    }
+  }, []);
+
+  // Save presets to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+  }, [presets]);
+
+  const savePreset = () => {
+    if (!presetName.trim()) return;
+    
+    const newPreset = {
+      id: Date.now(),
+      name: presetName.trim(),
+      cols,
+      rows,
+      spriteWidth,
+      spriteHeight,
+      offsetX: primary.x,
+      offsetY: primary.y,
+      hGap: secondH.x - primary.x - primary.w,
+      vGap: secondV.y - primary.y - primary.h,
+      baseName,
+    };
+    
+    setPresets(prev => [...prev, newPreset]);
+    setPresetName('');
+    setShowPresetModal(false);
+  };
+
+  const loadPreset = (preset) => {
+    setCols(preset.cols);
+    setRows(preset.rows);
+    setSpriteWidth(preset.spriteWidth);
+    setSpriteHeight(preset.spriteHeight);
+    setBaseName(preset.baseName);
+    
+    // Use saved offset, default to 0 for backwards compatibility with old presets
+    const offsetX = preset.offsetX ?? 0;
+    const offsetY = preset.offsetY ?? 0;
+    
+    // Update primary box position and size
+    setPrimary({ x: offsetX, y: offsetY, w: preset.spriteWidth, h: preset.spriteHeight });
+    
+    // Update secondary markers based on saved gaps and offset
+    setSecondH({ x: offsetX + preset.spriteWidth + preset.hGap, y: offsetY });
+    setSecondV({ x: offsetX, y: offsetY + preset.spriteHeight + preset.vGap });
+  };
+
+  const deletePreset = (presetId) => {
+    setPresets(prev => prev.filter(p => p.id !== presetId));
+  };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -250,6 +319,61 @@ export default function SpriteSlicer() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
+      {/* Preset Save Modal */}
+      {showPresetModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Save Preset</h2>
+              <button
+                onClick={() => setShowPresetModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block mb-1 text-sm">Preset Name</label>
+                <input
+                  type="text"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  placeholder="e.g., 16x16 with gaps"
+                  className="w-full bg-gray-700 px-3 py-2 rounded"
+                  autoFocus
+                  onKeyDown={(e) => e.key === 'Enter' && savePreset()}
+                />
+              </div>
+              
+              <div className="bg-gray-700/50 rounded p-3 text-sm text-gray-300 space-y-1">
+                <p>Grid: {cols} x {rows}</p>
+                <p>Sprite: {spriteWidth} x {spriteHeight}px</p>
+                <p>Offset: {primary.x}, {primary.y}px</p>
+                <p>Gaps: {hGap}px / {vGap}px</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowPresetModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={savePreset}
+                disabled={!presetName.trim()}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Setup Modal */}
       {showSetupModal && pendingImage && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
@@ -409,6 +533,56 @@ export default function SpriteSlicer() {
               <p><span className="text-yellow-500">●</span> Yellow: Vertical spacing</p>
               <p className="text-gray-400 mt-2">H-Gap: {hGap}px</p>
               <p className="text-gray-400">V-Gap: {vGap}px</p>
+            </div>
+
+            {/* Presets Section */}
+            <div className="pt-4 border-t border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-medium">Presets</label>
+                <button
+                  onClick={() => setShowPresetModal(true)}
+                  className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded"
+                >
+                  <Save size={14} />
+                  Save
+                </button>
+              </div>
+              
+              {presets.length === 0 ? (
+                <p className="text-gray-500 text-sm">No presets saved</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {presets.map(preset => (
+                    <div
+                      key={preset.id}
+                      className="bg-gray-700/50 rounded p-2 text-sm"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium truncate flex-1">{preset.name}</span>
+                        <div className="flex gap-1 ml-2">
+                          <button
+                            onClick={() => loadPreset(preset)}
+                            className="p-1 hover:bg-gray-600 rounded"
+                            title="Load preset"
+                          >
+                            <FolderOpen size={14} />
+                          </button>
+                          <button
+                            onClick={() => deletePreset(preset.id)}
+                            className="p-1 hover:bg-red-600 rounded text-gray-400 hover:text-white"
+                            title="Delete preset"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-gray-400 text-xs">
+                        {preset.cols}x{preset.rows} | {preset.spriteWidth}x{preset.spriteHeight}px
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             
             <button
